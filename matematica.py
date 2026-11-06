@@ -155,7 +155,166 @@ else:
     st.info("Selecione ao menos um Ano de Censo na barra lateral para visualizar o gráfico.")
 
 st.divider()
-st.subheader("")
+st.subheader("Informacies extras")
+
+
+# ==========================================
+# ANÁLISE DE CRESCIMENTO POPULACIONAL E OUTLIERS
+# ==========================================
+st.markdown("---")
+st.subheader("📈 Taxa de Crescimento Populacional por Cidade")
+
+if all(col in dfcidades.columns for col in ["Populacao 2010", "Populacao 2022"]):
+
+    df_crescimento = dfcidades[
+        ["Cidade", "Populacao 2010", "Populacao 2022"]
+    ].copy()
+
+    df_crescimento["Populacao 2010"] = pd.to_numeric(
+        df_crescimento["Populacao 2010"], errors="coerce"
+    )
+
+    df_crescimento["Populacao 2022"] = pd.to_numeric(
+        df_crescimento["Populacao 2022"], errors="coerce"
+    )
+
+    df_crescimento = df_crescimento.dropna()
+
+    df_crescimento = df_crescimento[
+        (df_crescimento["Populacao 2010"] > 0)
+    ]
+
+    # Cálculo da taxa de crescimento acumulada
+    df_crescimento["Crescimento (%)"] = (
+        (df_crescimento["Populacao 2022"] -
+         df_crescimento["Populacao 2010"]) /
+        df_crescimento["Populacao 2010"]
+    ) * 100
+
+    if not df_crescimento.empty:
+
+        # Taxa média de crescimento
+        media_crescimento = df_crescimento["Crescimento (%)"].mean()
+
+        maior_crescimento = df_crescimento.loc[
+            df_crescimento["Crescimento (%)"].idxmax()
+        ]
+
+        maior_queda = df_crescimento.loc[
+            df_crescimento["Crescimento (%)"].idxmin()
+        ]
+
+        # Indicadores
+        col_media, col_positivo, col_negativo = st.columns(3)
+
+        with col_media:
+            st.metric(
+                "📊 Crescimento Médio",
+                f"{media_crescimento:.2f}%"
+            )
+
+        with col_positivo:
+            st.metric(
+                "🚀 Maior Crescimento",
+                f"{maior_crescimento['Crescimento (%)']:.2f}%",
+                maior_crescimento["Cidade"]
+            )
+
+        with col_negativo:
+            st.metric(
+                "📉 Maior Queda",
+                f"{maior_queda['Crescimento (%)']:.2f}%",
+                maior_queda["Cidade"]
+            )
+
+        st.markdown("### 📈 Comparativo das Taxas de Crescimento")
+
+        # Gráfico de linhas
+        fig_linha = px.line(
+            df_crescimento.sort_values("Crescimento (%)"),
+            x="Cidade",
+            y="Crescimento (%)",
+            markers=True,
+            text="Crescimento (%)",
+            title="Crescimento Populacional Acumulado (2010–2022)",
+            labels={
+                "Cidade": "Cidades",
+                "Crescimento (%)": "Crescimento (%)"
+            },
+            color_discrete_sequence=["#386b61"]
+        )
+
+        fig_linha.add_hline(
+            y=0,
+            line_dash="dash",
+            line_color="red",
+            annotation_text="Crescimento zero"
+        )
+
+        fig_linha.update_traces(
+            texttemplate="%{text:.2f}%",
+            textposition="top center"
+        )
+
+        fig_linha.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            yaxis_title="Variação populacional (%)",
+            xaxis_title="Cidades"
+        )
+
+        st.plotly_chart(fig_linha, use_container_width=True)
+
+        # Tabela de resultados
+        st.markdown("### 📋 Resultados por Cidade")
+
+        df_resultados = df_crescimento[
+            ["Cidade", "Populacao 2010", "Populacao 2022", "Crescimento (%)"]
+        ].copy()
+
+        df_resultados = df_resultados.sort_values(
+            "Crescimento (%)", ascending=False
+        )
+
+        st.dataframe(
+            df_resultados.style.format({
+                "Populacao 2010": "{:,.0f}",
+                "Populacao 2022": "{:,.0f}",
+                "Crescimento (%)": "{:+.2f}%"
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
+
+        # Identificação dos extremos
+        st.markdown("### 🔎 Identificação dos Outliers de Crescimento")
+
+        col_outlier1, col_outlier2 = st.columns(2)
+
+        with col_outlier1:
+            with st.container(border=True):
+                st.markdown("#### 🚀 Maior crescimento populacional")
+                st.markdown(
+                    f"**{maior_crescimento['Cidade']}** apresentou "
+                    f"crescimento de **{maior_crescimento['Crescimento (%)']:.2f}%** "
+                    "entre 2010 e 2022."
+                )
+
+        with col_outlier2:
+            with st.container(border=True):
+                st.markdown("#### 📉 Maior redução populacional")
+                st.markdown(
+                    f"**{maior_queda['Cidade']}** apresentou "
+                    f"variação de **{maior_queda['Crescimento (%)']:.2f}%** "
+                    "entre 2010 e 2022."
+                )
+
+    else:
+        st.warning("Não existem dados populacionais válidos para calcular o crescimento.")
+
+else:
+    st.info("Selecione os anos de 2010 e 2022 na barra lateral para visualizar a análise.")
+
 
 
 # Conteúdo exigido no seu cenário/persona
@@ -184,13 +343,6 @@ with col_etaria_txt:
             "atendimento à terceira idade e acessibilidade na infraestrutura urbana."
         )
         st.link_button("Ver Análise Completa", "https://ecodebate.com.br")
-
-with col_etaria_img:
-    st.image(
-        "https://ibge.gov.br", 
-        caption="Estrutura e Transição da Pirâmide Etária Brasileira (Fonte: IBGE)",
-        use_container_width=True
-    )
 
 # ==========================================
 # SEÇÃO 2: MUDANÇAS NO RANKING DAS CAPITAIS (FEED DE NOTÍCIAS)
@@ -244,6 +396,65 @@ with col_noticia2:
         )
         st.link_button("Ver Estudo de Vulnerabilidade da RMBH", "https://observatoriodasmetropoles.net.br")
 
+
+# ==========================================
+# SEGUNDA LINHA DE CARDS: BH E FLORIANÓPOLIS
+# ==========================================
+
+col_linha2_left, col_linha2_right = st.columns(2)
+
+with col_linha2_left:
+    with st.container(border=True):
+        st.markdown("### ⛰️ Belo Horizonte (MG)")
+
+        st.image(
+            r"imagens\bh.jpeg",
+            caption="Painel Temático IBGE: População e Projeções de Belo Horizonte (MG)",
+            use_container_width=True
+        )
+
+        st.markdown(
+            "A população de Belo Horizonte **diminuiu 2,5%** nos últimos 12 anos, "
+            "de acordo com dados do **Censo 2022** do IBGE. "
+            "Em 2010, a capital mineira tinha **2.375.609** moradores, "
+            "caindo para **2.315.560**. "
+            "Em contrapartida, demonstrando o espalhamento periférico, "
+            "o número de habitantes de sua **Região Metropolitana cresceu 4,6%** "
+            "(alcançando 4.963.116 pessoas)."
+        )
+
+        st.link_button(
+            "Ler Notícia no G1",
+            "https://g1.globo.com/mg/minas-gerais/noticia/2023/06/28/populacao-de-bh-encolhe-25percent-aponta-censo-ja-o-numero-de-habitantes-da-regiao-metropolitana-aumentou.ghtml"
+        )
+
+with col_linha2_right:
+    with st.container(border=True):
+        st.markdown("### 🏝️ Florianópolis (SC)")
+
+        st.image(
+            r"imagens\flo.jpeg",
+            caption="Painel Temático IBGE: População Estimada e Indicadores de Florianópolis (SC)",
+            use_container_width=True
+        )
+
+        st.markdown(
+            "Florianópolis atrai quase **30 novos habitantes por dia** "
+            "e ganhou 120 mil novos moradores em uma década, registrando um "
+            "crescimento **cinco vezes acima da média nacional**. "
+            "Em 2016, a capital catarinense contava com **477.798** habitantes. "
+            "As estimativas para **2026** apontam para uma população de "
+            "**598.370 pessoas**, um impressionante salto de quase **26%** "
+            "impulsionado por migração qualificada."
+        )
+
+        st.link_button(
+            "Ler Notícia no ND Mais",
+            "https://ndmais.com.br/cidadania/crescimento-populacional-de-florianopolis-10-anos-novos-moradores/"
+        )
+
+
+
 # ==========================================
 # SEÇÃO 3: FENÔMENOS URBANOS E DESAFIOS SOCIOESPACIAIS
 # ==========================================
@@ -273,12 +484,12 @@ with col_macro_txt:
 with col_macro_img:
     # Ilustração da Segregação Socioespacial e Urbanização Tardira (Usando imagens conceituais que batem com o briefing)
     st.image(
-        "https://wikimedia.org",
+        r"imagens\tarcilia.jpeg",
         caption="Obra 'Operários' (1933) de Tarsila do Amaral: Retrato histórico do fluxo migratório e da concentração técnica da industrialização brasileira.",
         use_container_width=True
     )
     st.image(
-        "https://shutterstock.com",
+        "imagens\pud.jpeg",
         caption="Paisagem Urbana Desigual: Processo de favelização e o desafio da infraestrutura de moradia nas grandes metrópoles brasileiras.",
         use_container_width=True
     )
